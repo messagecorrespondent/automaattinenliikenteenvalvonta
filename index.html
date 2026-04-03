@@ -1,12 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Traffic Camera</title>
+<meta charset="UTF-8">
+<title>Traffic Camera</title>
+
+<style>
+body { margin:0; background:black; }
+video { width:100%; }
+
+#flash {
+    position:fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background:white;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 0.1s;
+}
+</style>
 </head>
+
 <body>
 
-<video id="video" autoplay playsinline style="width:100%;"></video>
+<video id="video" autoplay playsinline></video>
 <canvas id="canvas" style="display:none;"></canvas>
+<div id="flash"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -24,32 +42,167 @@ const db = getFirestore(app);
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const flash = document.getElementById("flash");
+
+// 🔥 KAMERA INFO
+const CAM_ID = "cam1";
+const CAM_NAME = "Testikamera";
+let LOCATION = "Haetaan...";
+
+// GPS
+navigator.geolocation.getCurrentPosition(pos => {
+    LOCATION = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+});
 
 // kamera
+let streamRef;
+
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" }
 }).then(stream => {
     video.srcObject = stream;
+    streamRef = stream;
 });
 
-// lähetys
-setInterval(() => {
-    if (!video.videoWidth) return;
+// 🔥 SALAMA
+function triggerFlash() {
+    flash.style.opacity = 1;
+    setTimeout(() => flash.style.opacity = 0, 100);
+
+    // torch (jos toimii)
+    try {
+        const track = streamRef.getVideoTracks()[0];
+        track.applyConstraints({ advanced: [{ torch: true }] });
+        setTimeout(() => {
+            track.applyConstraints({ advanced: [{ torch: false }] });
+        }, 150);
+    } catch {}
+}
+
+// 🔥 AIKA FORMAT
+function getTimeData() {
+    const now = new Date();
+
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth()+1).padStart(2, '0');
+    const yy = String(now.getFullYear()).slice(-2);
+
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    return {
+        date: `${dd}${mm}${yy}`,
+        time: `${hh}${mi}${ss}`
+    };
+}
+
+// 🔥 OVERLAY
+function drawOverlay(speed=null) {
+    const { date, time } = getTimeData();
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, 420, 100);
+
+    ctx.fillStyle = "white";
+    ctx.font = "20px monospace";
+
+    ctx.fillText(`DATE: ${date}`, 10, 25);
+    ctx.fillText(`TIME: ${time}`, 10, 50);
+    ctx.fillText(`CAM: ${CAM_NAME}`, 10, 75);
+    ctx.fillText(`ID: ${CAM_ID}`, 200, 25);
+    ctx.fillText(`LOC: ${LOCATION}`, 200, 50);
+
+    if (speed !== null) {
+        ctx.fillStyle = "red";
+        ctx.fillText(`SPEED: ${speed.toFixed(1)} km/h`, 200, 75);
+    }
+}
+
+// 🔥 MOTION
+let prevFrame = null;
+let lastCapture = 0;
+const SPEED_LIMIT = 30;
+
+function process() {
+    if (!video.videoWidth) {
+        requestAnimationFrame(process);
+        return;
+    }
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
     ctx.drawImage(video, 0, 0);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.5); // pienempi koko
+    const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
+
+    let speed = 0;
+
+    if (prevFrame) {
+        let diff = 0;
+
+        for (let i=0; i<frame.data.length; i+=4) {
+            diff += Math.abs(frame.data[i] - prevFrame.data[i]);
+        }
+
+        const motion = diff / frame.data.length;
+
+        speed = motion * 50; // kalibroitavissa myöhemmin
+    }
+
+    // 🔥 LIVE OVERLAY
+    drawOverlay();
+
+    // 🚨 YLINOPEUS
+    if (speed > SPEED_LIMIT && Date.now() - lastCapture > 2000) {
+
+        console.log("🚨 SPEEDING", speed);
+
+        triggerFlash();
+
+        // piirrä overlay speedillä
+        drawOverlay(speed);
+
+        const img = canvas.toDataURL("image/jpeg", 1.0);
+
+        addDoc(collection(db, "violations"), {
+            image: img,
+            speed: speed,
+            timestamp: serverTimestamp(),
+            deviceId: CAM_ID,
+            camName: CAM_NAME,
+            location: LOCATION
+        });
+
+        lastCapture = Date.now();
+    }
+
+    prevFrame = frame;
+
+    requestAnimationFrame(process);
+}
+
+// 🔥 LIVE FRAME FIREBASEEN
+setInterval(() => {
+    if (!canvas.width) return;
+
+    const img = canvas.toDataURL("image/jpeg", 0.5);
 
     addDoc(collection(db, "frames"), {
-        image: dataUrl,
+        image: img,
         timestamp: serverTimestamp(),
-        deviceId: "cam1"
+        deviceId: CAM_ID,
+        camName: CAM_NAME
     });
 
 }, 1000);
+
+// start
+video.onloadedmetadata = () => {
+    process();
+};
+
 </script>
 
 </body>
