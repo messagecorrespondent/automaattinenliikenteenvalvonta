@@ -10,35 +10,29 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import { getFirestore, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 🔥 SUN CONFIG (OK sellaisenaan)
 const firebaseConfig = {
   apiKey: "AIzaSyAgfRCiyw7ZfIh54c2MBD8ZxcKoj6E9apE",
   authDomain: "automaattinenvalvonta.firebaseapp.com",
   projectId: "automaattinenvalvonta",
-  storageBucket: "automaattinenvalvonta.appspot.com",
-  messagingSenderId: "270648215071",
-  appId: "1:270648215071:web:4ce596590df7d53f52372a"
 };
 
 const app = initializeApp(firebaseConfig);
-const storage = getStorage(app);
 const db = getFirestore(app);
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-// 📸 KAMERA
+// kamera
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" }
 }).then(stream => {
     video.srcObject = stream;
 });
 
-// 📡 UPLOAD LOOP
+// lähetys
 setInterval(() => {
     if (!video.videoWidth) return;
 
@@ -47,31 +41,15 @@ setInterval(() => {
 
     ctx.drawImage(video, 0, 0);
 
-    canvas.toBlob(async (blob) => {
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.5); // pienempi koko
 
-        const fileName = `frame_${Date.now()}.jpg`;
-        const storageRef = ref(storage, "images/" + fileName);
+    addDoc(collection(db, "frames"), {
+        image: dataUrl,
+        timestamp: serverTimestamp(),
+        deviceId: "cam1"
+    });
 
-        try {
-            await uploadBytes(storageRef, blob);
-
-            const url = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/images%2F${fileName}?alt=media`;
-
-            await addDoc(collection(db, "frames"), {
-                imageUrl: url,
-                timestamp: serverTimestamp(),
-                deviceId: "cam1"
-            });
-
-            console.log("Uploaded:", fileName);
-
-        } catch (err) {
-            console.error("Upload error:", err);
-        }
-
-    }, "image/jpeg");
-
-}, 1000); // 1 FPS
+}, 1000);
 </script>
 
 </body>
