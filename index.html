@@ -44,9 +44,9 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const flash = document.getElementById("flash");
 
-// 🔥 KAMERA INFO
+// 🔥 KAMERA DATA
 const CAM_ID = "cam1";
-const CAM_NAME = "Testikamera";
+let CAM_NAME = "Ladataan...";
 let LOCATION = "Haetaan...";
 
 // GPS
@@ -64,12 +64,11 @@ navigator.mediaDevices.getUserMedia({
     streamRef = stream;
 });
 
-// 🔥 SALAMA
+// ⚡ SALAMA
 function triggerFlash() {
     flash.style.opacity = 1;
     setTimeout(() => flash.style.opacity = 0, 100);
 
-    // torch (jos toimii)
     try {
         const track = streamRef.getVideoTracks()[0];
         track.applyConstraints({ advanced: [{ torch: true }] });
@@ -79,47 +78,68 @@ function triggerFlash() {
     } catch {}
 }
 
-// 🔥 AIKA FORMAT
+// 🕒 AIKA
 function getTimeData() {
     const now = new Date();
 
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth()+1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2,'0');
+    const mm = String(now.getMonth()+1).padStart(2,'0');
     const yy = String(now.getFullYear()).slice(-2);
 
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mi = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mi = String(now.getMinutes()).padStart(2,'0');
+    const ss = String(now.getSeconds()).padStart(2,'0');
 
     return {
         date: `${dd}${mm}${yy}`,
-        time: `${hh}${mi}${ss}`
+        time: `${hh}:${mi}:${ss}`
     };
 }
 
-// 🔥 OVERLAY
+// 🔥 OVERLAY (TÄYSIN UUSI)
 function drawOverlay(speed=null) {
     const { date, time } = getTimeData();
 
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // ===== YLÄPALKKI =====
     ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, 420, 100);
+    ctx.fillRect(0, 0, w, 60);
 
     ctx.fillStyle = "white";
-    ctx.font = "20px monospace";
+    ctx.font = "18px monospace";
 
-    ctx.fillText(`DATE: ${date}`, 10, 25);
-    ctx.fillText(`TIME: ${time}`, 10, 50);
-    ctx.fillText(`CAM: ${CAM_NAME}`, 10, 75);
-    ctx.fillText(`ID: ${CAM_ID}`, 200, 25);
-    ctx.fillText(`LOC: ${LOCATION}`, 200, 50);
+    ctx.fillText(`DATE: ${date}`, 10, 20);
+    ctx.fillText(`TIME: ${time}`, 10, 45);
+    ctx.fillText(`CAM: ${CAM_NAME}`, 200, 20);
+    ctx.fillText(`ID: ${CAM_ID}`, 200, 45);
+    ctx.fillText(`LOC: ${LOCATION}`, 400, 45);
 
     if (speed !== null) {
         ctx.fillStyle = "red";
-        ctx.fillText(`SPEED: ${speed.toFixed(1)} km/h`, 200, 75);
+        ctx.fillText(`SPEED: ${speed.toFixed(1)} km/h`, 400, 20);
     }
+
+    // ===== ALA VASEN (CAM NAME) =====
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, h-40, 250, 40);
+
+    ctx.fillStyle = "white";
+    ctx.fillText(CAM_NAME, 10, h-15);
+
+    // ===== ALA OIKEA (AIKA) =====
+    const timeText = `${date} ${time}`;
+    const textWidth = ctx.measureText(timeText).width;
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(w - textWidth - 20, h-40, textWidth + 20, 40);
+
+    ctx.fillStyle = "white";
+    ctx.fillText(timeText, w - textWidth - 10, h-15);
 }
 
-// 🔥 MOTION
+// 🔥 MOTION + SPEED
 let prevFrame = null;
 let lastCapture = 0;
 const SPEED_LIMIT = 30;
@@ -147,21 +167,18 @@ function process() {
         }
 
         const motion = diff / frame.data.length;
-
-        speed = motion * 50; // kalibroitavissa myöhemmin
+        speed = motion * 50;
     }
 
-    // 🔥 LIVE OVERLAY
+    // 🔥 LIVE overlay
     drawOverlay();
 
     // 🚨 YLINOPEUS
     if (speed > SPEED_LIMIT && Date.now() - lastCapture > 2000) {
 
-        console.log("🚨 SPEEDING", speed);
-
         triggerFlash();
 
-        // piirrä overlay speedillä
+        // 🔥 piirretään speed overlay ennen tallennusta
         drawOverlay(speed);
 
         const img = canvas.toDataURL("image/jpeg", 1.0);
@@ -198,7 +215,6 @@ setInterval(() => {
 
 }, 1000);
 
-// start
 video.onloadedmetadata = () => {
     process();
 };
