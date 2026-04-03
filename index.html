@@ -44,17 +44,14 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const flash = document.getElementById("flash");
 
-// 🔥 KAMERA DATA
 const CAM_ID = "cam1";
-let CAM_NAME = "Ladataan...";
-let LOCATION = "Haetaan...";
+const CAM_NAME = "Testikamera";
+let LOCATION = "N/A";
 
-// GPS
 navigator.geolocation.getCurrentPosition(pos => {
     LOCATION = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
 });
 
-// kamera
 let streamRef;
 
 navigator.mediaDevices.getUserMedia({
@@ -64,17 +61,18 @@ navigator.mediaDevices.getUserMedia({
     streamRef = stream;
 });
 
-// ⚡ SALAMA
+// ⚡ SALAMA (UI + TORCH)
 function triggerFlash() {
     flash.style.opacity = 1;
-    setTimeout(() => flash.style.opacity = 0, 100);
+    setTimeout(() => flash.style.opacity = 0, 120);
 
     try {
         const track = streamRef.getVideoTracks()[0];
         track.applyConstraints({ advanced: [{ torch: true }] });
+
         setTimeout(() => {
             track.applyConstraints({ advanced: [{ torch: false }] });
-        }, 150);
+        }, 200);
     } catch {}
 }
 
@@ -96,14 +94,13 @@ function getTimeData() {
     };
 }
 
-// 🔥 OVERLAY (TÄYSIN UUSI)
+// 🔥 OVERLAY
 function drawOverlay(speed=null) {
     const { date, time } = getTimeData();
-
     const w = canvas.width;
     const h = canvas.height;
 
-    // ===== YLÄPALKKI =====
+    // TOP BAR
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, w, 60);
 
@@ -112,31 +109,31 @@ function drawOverlay(speed=null) {
 
     ctx.fillText(`DATE: ${date}`, 10, 20);
     ctx.fillText(`TIME: ${time}`, 10, 45);
-    ctx.fillText(`CAM: ${CAM_NAME}`, 200, 20);
-    ctx.fillText(`ID: ${CAM_ID}`, 200, 45);
-    ctx.fillText(`LOC: ${LOCATION}`, 400, 45);
+    ctx.fillText(`CAM: ${CAM_NAME}`, 220, 20);
+    ctx.fillText(`ID: ${CAM_ID}`, 220, 45);
+    ctx.fillText(`LOC: ${LOCATION}`, 420, 45);
 
     if (speed !== null) {
         ctx.fillStyle = "red";
-        ctx.fillText(`SPEED: ${speed.toFixed(1)} km/h`, 400, 20);
+        ctx.fillText(`SPEED: ${speed.toFixed(1)} km/h`, 420, 20);
     }
 
-    // ===== ALA VASEN (CAM NAME) =====
+    // BOTTOM LEFT (CAM NAME)
     ctx.fillStyle = "black";
     ctx.fillRect(0, h-40, 250, 40);
 
     ctx.fillStyle = "white";
     ctx.fillText(CAM_NAME, 10, h-15);
 
-    // ===== ALA OIKEA (AIKA) =====
-    const timeText = `${date} ${time}`;
-    const textWidth = ctx.measureText(timeText).width;
+    // BOTTOM RIGHT (TIME)
+    const txt = `${date} ${time}`;
+    const tw = ctx.measureText(txt).width;
 
     ctx.fillStyle = "black";
-    ctx.fillRect(w - textWidth - 20, h-40, textWidth + 20, 40);
+    ctx.fillRect(w - tw - 20, h-40, tw + 20, 40);
 
     ctx.fillStyle = "white";
-    ctx.fillText(timeText, w - textWidth - 10, h-15);
+    ctx.fillText(txt, w - tw - 10, h-15);
 }
 
 // 🔥 MOTION + SPEED
@@ -153,6 +150,7 @@ function process() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // 1. RAW FRAME
     ctx.drawImage(video, 0, 0);
 
     const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
@@ -166,11 +164,10 @@ function process() {
             diff += Math.abs(frame.data[i] - prevFrame.data[i]);
         }
 
-        const motion = diff / frame.data.length;
-        speed = motion * 50;
+        speed = (diff / frame.data.length) * 50;
     }
 
-    // 🔥 LIVE overlay
+    // 2. LIVE OVERLAY
     drawOverlay();
 
     // 🚨 YLINOPEUS
@@ -178,7 +175,7 @@ function process() {
 
         triggerFlash();
 
-        // 🔥 piirretään speed overlay ennen tallennusta
+        // 🔥 PIIRRETÄÄN SPEED ennen tallennusta
         drawOverlay(speed);
 
         const img = canvas.toDataURL("image/jpeg", 1.0);
@@ -200,7 +197,7 @@ function process() {
     requestAnimationFrame(process);
 }
 
-// 🔥 LIVE FRAME FIREBASEEN
+// 🔥 LIVE STREAM
 setInterval(() => {
     if (!canvas.width) return;
 
@@ -215,10 +212,7 @@ setInterval(() => {
 
 }, 1000);
 
-video.onloadedmetadata = () => {
-    process();
-};
-
+video.onloadedmetadata = () => process();
 </script>
 
 </body>
